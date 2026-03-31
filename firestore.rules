@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - email: string (required, email format)
+    //   - photoURL: string (optional)
+    //   - language: string (required, 'en' or 'ar')
+    //   - theme: string (required, 'light' or 'dark')
+    //   - onboardingCompleted: boolean (required)
+    //   - emotionalType: string (required)
+    //   - scores: map (required)
+    //   - streak: number (required)
+    //   - lastCheckIn: string (optional, ISO date)
+    //   - createdAt: string (required, ISO date)
+    //
+    // Collection: users/{userId}/history
+    // Document ID: dayId
+    // Fields:
+    //   - userId: string (required)
+    //   - dayNumber: number (required)
+    //   - completed: boolean (required)
+    //   - tasks: list (required)
+    //   - reflectionAnswer: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "adamlaarif781@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'language', 'theme', 'onboardingCompleted', 'emotionalType', 'scores', 'streak', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.language in ['en', 'ar'] &&
+             data.theme in ['light', 'dark'] &&
+             data.onboardingCompleted is bool &&
+             data.emotionalType is string &&
+             data.scores is map &&
+             data.streak is number &&
+             data.createdAt is string &&
+             (!('role' in data) || data.role in ['admin', 'user']);
+    }
+
+    function isValidPlan(data) {
+      return data.keys().hasAll(['userId', 'dayNumber', 'completed', 'tasks']) &&
+             data.userId == request.auth.uid &&
+             data.dayNumber is number &&
+             data.completed is bool &&
+             data.tasks is list;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user');
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       request.resource.data.uid == resource.data.uid &&
+                       (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+
+      match /history/{dayId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidPlan(request.resource.data);
+        allow update: if isOwner(userId) && isValidPlan(request.resource.data) &&
+                        request.resource.data.userId == resource.data.userId;
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user profile, emotional type, and settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string" },
+        "language": { "type": "string", "enum": ["en", "ar"] },
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "onboardingCompleted": { "type": "boolean" },
+        "emotionalType": { "type": "string" },
+        "scores": {
+          "type": "object",
+          "properties": {
+            "anxiety": { "type": "number" },
+            "jealousy": { "type": "number" },
+            "overthinking": { "type": "number" }
+          }
+        },
+        "streak": { "type": "integer" },
+        "lastCheckIn": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["uid", "displayName", "email", "language", "theme", "onboardingCompleted", "emotionalType", "scores", "streak", "createdAt"]
+    },
+    "plans": {
+      "title": "Daily Plan",
+      "description": "Stores the user's progress on their 7-day plan.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dayNumber": { "type": "integer" },
+        "completed": { "type": "boolean" },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "completed": { "type": "boolean" }
+            }
+          }
+        },
+        "reflectionAnswer": { "type": "string" }
+      },
+      "required": ["userId", "dayNumber", "completed", "tasks"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile document."
+    },
+    "/users/{userId}/history/{dayId}": {
+      "schema": "plans",
+      "description": "User's daily plan history."
+    }
+  }
+}
